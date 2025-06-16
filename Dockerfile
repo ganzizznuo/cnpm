@@ -48,7 +48,7 @@ RUN apt-get update && \
     python3 \
     python3-pip \
     nodejs \
-    golang \
+    golang-go \
     # --- 进程管理与计划任务 ---
     supervisor \
     cron \
