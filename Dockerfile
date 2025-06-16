@@ -15,6 +15,9 @@ ENV TZ=Asia/Shanghai
 # Set the default root password. Can be overridden at runtime with -e ROOT_PASSWORD=your_password
 ENV ROOT_PASSWORD=admin123
 
+RUN echo '#!/bin/sh' > /usr/sbin/policy-rc.d && \
+    echo 'exit 101' >> /usr/sbin/policy-rc.d && \
+    chmod +x /usr/sbin/policy-rc.d
 # ==================================================================
 # Step 1 & 2: Install Base Tools & Language Environments
 # ==================================================================
