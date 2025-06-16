@@ -1,25 +1,28 @@
+# Dockerfile (不再使用 Supervisor 的最终版)
+
 # ==================================================================
 # 基础镜像: 使用官方的 Nginx Proxy Manager 镜像
 # ==================================================================
 FROM jc21/nginx-proxy-manager:latest
 
-# 设置 DEBIAN_FRONTEND 为 noninteractive，避免在安装过程中出现大部分交互式提示
+# ==================================================================
+# 镜像元数据与环境变量
+# ==================================================================
+LABEL maintainer="Your Name <your.email@example.com>"
+LABEL description="集成了SSH、Cron、FRPC、开发工具(Python, Node.js) 的 Nginx Proxy Manager."
+
 ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Asia/Shanghai
-# 设置默认的 root 密码。可以在容器运行时通过 -e ROOT_PASSWORD=your_password 来覆盖
 ENV ROOT_PASSWORD=admin123
-
+ENV TZ=Asia/Shanghai
 # ==================================================================
-# 步骤 1 & 2: 安装基础工具和语言环境 (已应用所有修复)
+# 步骤 1 & 2: 安装基础工具和语言环境
 # ==================================================================
-# 修复 1: 创建临时的 policy-rc.d 文件，阻止 dpkg 在安装软件包后自动启动服务，避免与 s6-overlay 冲突。
-RUN echo '#!/bin/sh' > /usr/sbin/policy-rc.d && \
-    echo 'exit 101' >> /usr/sbin/policy-rc.d && \
-    chmod +x /usr/sbin/policy-rc.d
+# 修复 1: 阻止 dpkg 自动启动服务
+RUN echo '#!/bin/sh' > /usr/sbin/policy-rc.d && echo 'exit 101' >> /usr/sbin/policy-rc.d && chmod +x /usr/sbin/policy-rc.d
 
-# 执行安装
+# 执行安装 (注意: 已移除 supervisor)
 RUN apt-get update && \
-    # 修复 2: 添加 dpkg 选项，强制对配置文件冲突使用默认行为（保留旧文件），从而完全避免交互式提示。
+    # 修复 2: 添加 dpkg 选项以避免配置文件冲突
     apt-get install -y \
     -o Dpkg::Options::="--force-confdef" \
     -o Dpkg::Options::="--force-confold" \
@@ -36,34 +39,20 @@ RUN apt-get update && \
     unzip \
     sshpass \
     git \
-    # --- 语言环境 (从官方源安装) ---
+    # --- 语言环境 ---
     python3 \
     python3-pip \
     nodejs \
-    golang \
-    # --- 进程管理与计划任务 ---
-    supervisor \
+    # --- 计划任务 ---
     cron \
     && \
-    # 清理工作: 删除临时的 policy-rc.d 文件和 APT 缓存
+    # 清理工作
     rm /usr/sbin/policy-rc.d && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # ==================================================================
-# 步骤 3: 配置 Supervisor
-# ==================================================================
-# 创建 supervisor 的日志目录
-RUN mkdir -p /var/log/supervisor
-
-# 创建存放自定义 supervisor 配置的目录
-RUN mkdir -p /data/supervisor/
-
-# 最终修复: 使用 printf 代替 echo，确保换行符被正确写入，从而修复 supervisord.conf 的解析错误。
-RUN printf "\n[include]\nfiles = /data/supervisor/*.conf\n" >> /etc/supervisor/supervisord.conf
-
-# ==================================================================
-# 步骤 4: 配置 SSH 服务
+# 步骤 3 & 4: 配置 SSH 和 Cron
 # ==================================================================
 # 允许 root 用户通过密码登录
 RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
@@ -72,13 +61,8 @@ RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/
 # 为 sshd 创建运行目录
 RUN mkdir -p /run/sshd
 
-# ==================================================================
-# 步骤 5: 配置 Cron
-# ==================================================================
 # 创建存放自定义 cron 任务的目录
 RUN mkdir -p /data/cron/
-
-# 复制一个示例 cron 文件以演示功能
 COPY cron/ /data/cron/
 
 # ==================================================================
@@ -86,18 +70,13 @@ COPY cron/ /data/cron/
 # ==================================================================
 # 复制在容器启动时执行的入口点脚本
 COPY entrypoint.sh /entrypoint.sh
-# 赋予入口点脚本可执行权限
 RUN chmod +x /entrypoint.sh
 
-# 暴露端口:
-# 22: SSH 服务
-# 80, 443: Nginx Proxy Manager 的公共访问端口
-# 81: Nginx Proxy Manager 的管理后台 UI 端口
+# 暴露端口
 EXPOSE 22 80 81 443
 
 # 指定容器的入口点为我们的自定义脚本
 ENTRYPOINT ["/entrypoint.sh"]
 
-# 容器的默认命令是以前台模式运行 supervisord
-# "-n" 参数可以防止它以守护进程模式运行，从而保持容器存活
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf", "-n"]
+# 将默认命令改回基础镜像的 /init
+CMD ["/init"]
