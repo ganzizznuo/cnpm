@@ -3,34 +3,32 @@
 # ==================================================================
 FROM jc21/nginx-proxy-manager:latest
 
+# ==================================================================
+# 镜像元数据与环境变量
+# ==================================================================
+LABEL maintainer="Your Name <your.email@example.com>"
+LABEL description="集成了SSH、开发工具(Python, Node.js)、Supervisor 和动态 Cron 的 Nginx Proxy Manager."
+
 # 设置 DEBIAN_FRONTEND 为 noninteractive，避免在安装过程中出现交互式提示
 ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Asia/Shanghai
+
 # 设置默认的 root 密码。可以在容器运行时通过 -e ROOT_PASSWORD=your_password 来覆盖
 ENV ROOT_PASSWORD=admin123
 
 # ==================================================================
-# 步骤 1 & 2: 安装基础工具和语言环境
+# 步骤 1 & 2: 安装基础工具和语言环境 (已简化和优化)
 # ==================================================================
+# 说明:
+# 为解决反复出现的构建错误，此版本进行了简化，以确保构建成功。
+# 主要改动是移除了添加第三方 NodeSource APT 源的复杂步骤，直接从 Debian 12 官方源安装所有软件。
+# 这将安装 Debian 12 自带的 Node.js (通常是 v18.x)，该方法更稳定可靠。
 RUN apt-get update && \
-    # 安装添加 Node.js 源所需的前置依赖
-    apt-get install -y ca-certificates curl gnupg && \
-    # 为 APT 创建存放 GPG 密钥的目录
-    mkdir -p /etc/apt/keyrings && \
-    # 下载 NodeSource 的 GPG 密钥并存放到指定位置
-    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
-    # 定义 Node.js 的主版本号
-    NODE_MAJOR=20 && \
-    # 添加 NodeSource 的 APT 源 (重要修复: 此处使用 bookworm 替换了原来的 nodistro)
-    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x bookworm main" | tee /etc/apt/sources.list.d/nodesource.list && \
-    # 再次更新 APT 包列表以包含新的 Node.js 源
-    apt-get update && \
-    # 一次性安装所有需要的软件包，使用 --no-install-recommends 减少不必要的依赖
     apt-get install -y --no-install-recommends \
     # --- 基础工具 ---
     openssh-server \
     sudo \
     wget \
+    curl \
     busybox-suid \
     nano \
     tar \
@@ -38,7 +36,7 @@ RUN apt-get update && \
     unzip \
     sshpass \
     git \
-    # --- 语言环境 ---
+    # --- 语言环境 (从官方源安装) ---
     python3 \
     python3-pip \
     nodejs \
