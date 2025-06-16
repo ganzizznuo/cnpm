@@ -1,40 +1,38 @@
 # ==================================================================
-# Base Image: Use the official Nginx Proxy Manager image
+# 基础镜像: 使用官方的 Nginx Proxy Manager 镜像
 # ==================================================================
 FROM jc21/nginx-proxy-manager:latest
 
 # ==================================================================
-# Metadata and Environment Variables
+# 镜像元数据与环境变量
 # ==================================================================
 LABEL maintainer="Your Name <your.email@example.com>"
-LABEL description="Nginx Proxy Manager with SSH, Dev Tools (Python, Node.js, Go), Supervisor, and dynamic Cron."
+LABEL description="集成了SSH、开发工具(Python, Node.js)、Supervisor 和动态 Cron 的 Nginx Proxy Manager."
 
-# Set DEBIAN_FRONTEND to noninteractive to avoid prompts during installation
+# 设置 DEBIAN_FRONTEND 为 noninteractive，避免在安装过程中出现交互式提示
 ENV DEBIAN_FRONTEND=noninteractive
-ENV TZ=Asia/Shanghai
-# Set the default root password. Can be overridden at runtime with -e ROOT_PASSWORD=your_password
+
+# 设置默认的 root 密码。可以在容器运行时通过 -e ROOT_PASSWORD=your_password 来覆盖
 ENV ROOT_PASSWORD=admin123
 
+# ==================================================================
+# 步骤 1 & 2: 安装基础工具和语言环境 (已应用 dpkg 修复)
+# ==================================================================
+# 关键修复: 创建一个临时的 policy-rc.d 文件，阻止 dpkg 在安装软件包后自动启动服务。
+# 这可以避免安装脚本与基础镜像的 s6-overlay 环境发生冲突。
+# exit 101 的含义是 "action forbidden by policy"，即策略禁止该操作。
 RUN echo '#!/bin/sh' > /usr/sbin/policy-rc.d && \
     echo 'exit 101' >> /usr/sbin/policy-rc.d && \
     chmod +x /usr/sbin/policy-rc.d
-# ==================================================================
-# Step 1 & 2: Install Base Tools & Language Environments
-# ==================================================================
+
+# 执行安装
 RUN apt-get update && \
-    # Install Node.js (using NodeSource repository for a recent version)
-    apt-get install -y ca-certificates curl gnupg && \
-    mkdir -p /etc/apt/keyrings && \
-    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
-    NODE_MAJOR=20 && \
-    echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list && \
-    apt-get update && \
-    # Install all required packages
     apt-get install -y --no-install-recommends \
-    # --- Basic Tools ---
+    # --- 基础工具 ---
     openssh-server \
     sudo \
     wget \
+    curl \
     busybox \
     nano \
     tar \
@@ -42,70 +40,71 @@ RUN apt-get update && \
     unzip \
     sshpass \
     git \
-    # --- Language Runtimes ---
+    # --- 语言环境 (从官方源安装) ---
     python3 \
     python3-pip \
     nodejs \
-    golang \
-    # --- Process Managers & Schedulers ---
+    # --- 进程管理与计划任务 ---
     supervisor \
     cron \
     && \
+    # 清理工作: 删除临时的 policy-rc.d 文件和 APT 缓存
     rm /usr/sbin/policy-rc.d && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # ==================================================================
-# Step 3: Configure Supervisor
+# 步骤 3: 配置 Supervisor
 # ==================================================================
-# Create supervisor log directory
+# 创建 supervisor 的日志目录
 RUN mkdir -p /var/log/supervisor
 
-# Create the directory for custom supervisor configs
-RUN mkdir -p /data/supervisor
+# 创建存放自定义 supervisor 配置的目录
+RUN mkdir -p /data/supervisor/
 
-# Copy our custom supervisor config files into the image
+# 将我们自定义的 supervisor 配置文件复制到镜像中
 COPY supervisor/ /data/supervisor/
 
-# Modify the main supervisor config to include all configs from our custom directory
+# 修改 supervisor 的主配置文件，让它加载我们自定义目录下的所有 .conf 文件
 RUN echo "\n[include]" >> /etc/supervisor/supervisord.conf && \
     echo "files = /data/supervisor/*.conf" >> /etc/supervisor/supervisord.conf
 
 # ==================================================================
-# Step 4: Configure SSH Server
+# 步骤 4: 配置 SSH 服务
 # ==================================================================
-# Permit root login with password
+# 允许 root 用户通过密码登录
 RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config && \
     sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
 
-# Create the directory for SSH host keys
+# 为 sshd 创建运行目录
 RUN mkdir -p /run/sshd
 
 # ==================================================================
-# Step 5: Configure Cron
+# 步骤 5: 配置 Cron
 # ==================================================================
-# Create the directory for custom cron jobs
-RUN mkdir -p /data/cron
+# 创建存放自定义 cron 任务的目录
+RUN mkdir -p /data/cron/
 
-# Copy a placeholder cron file to demonstrate functionality
+# 复制一个示例 cron 文件以演示功能
 COPY cron/ /data/cron/
 
 # ==================================================================
-# Final Setup: Entrypoint, Ports, and Command
+# 最后设置: 入口点、端口和默认命令
 # ==================================================================
-# Copy the entrypoint script that will run on container start
+# 复制在容器启动时执行的入口点脚本
 COPY entrypoint.sh /entrypoint.sh
+# 赋予入口点脚本可执行权限
 RUN chmod +x /entrypoint.sh
 
-# Expose ports:
-# 22 for SSH
-# 80, 443 for Nginx Proxy Manager public traffic
-# 81 for Nginx Proxy Manager admin UI
+# 暴露端口:
+# 22: SSH 服务
+# 80, 443: Nginx Proxy Manager 的公共访问端口
+# 81: Nginx Proxy Manager 的管理后台 UI 端口
 EXPOSE 22 80 81 443
 
-# Set the entrypoint to our custom script
+# 指定容器的入口点为我们的自定义脚本
 ENTRYPOINT ["/entrypoint.sh"]
 
-# The default command is to run supervisord in the foreground
-# The "-n" flag prevents it from daemonizing
+# 容器的默认命令是以前台模式运行 supervisord
+# "-n" 参数可以防止它以守护进程模式运行，从而保持容器存活
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/supervisord.conf", "-n"]
