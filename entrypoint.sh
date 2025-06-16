@@ -50,9 +50,25 @@ if [ -f "$FRPC_PATH" ] && [ -f "$FRPC_INI_PATH" ]; then
 else
     echo ">> FRPC not found in /data/frpc, skipping."
 fi
+# ==================================================================
+# 4. 启动 FRPC
+# ==================================================================
+FRPS_PATH="/data/frps/frps"
+FRPS_INI_PATH="/data/frps/frps.toml"
+
+if [ -f "$FRPS_PATH" ] && [ -f "$FRPS_INI_PATH" ]; then
+    echo ">> Found frps, starting service..."
+    # 确保可执行
+    chmod +x "$FRPS_PATH"
+    # 在后台启动 frps，并将日志重定向（可选，但推荐）
+    nohup "$FRPS_PATH" -c "$FRPS_INI_PATH" > /var/log/frps.log 2>&1 &
+    echo ">> FRPS service started in background."
+else
+    echo ">> FRPS not found in /data/frps, skipping."
+fi
 
 # ==================================================================
-# 4. 移交主进程 (最重要的一步)
+# 5. 移交主进程 (最重要的一步)
 # ==================================================================
 echo ">> Handing over control to Nginx Proxy Manager..."
 # 使用 exec 执行原始的 CMD，这样 /init 就会成为主进程
