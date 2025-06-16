@@ -48,7 +48,7 @@ RUN apt-get update && \
     supervisor \
     cron \
     && \
-    # Clean up APT cache to reduce image size
+    rm /usr/sbin/policy-rc.d && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
