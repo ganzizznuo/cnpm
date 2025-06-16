@@ -9,25 +9,27 @@ FROM jc21/nginx-proxy-manager:latest
 LABEL maintainer="Your Name <your.email@example.com>"
 LABEL description="集成了SSH、开发工具(Python, Node.js)、Supervisor 和动态 Cron 的 Nginx Proxy Manager."
 
-# 设置 DEBIAN_FRONTEND 为 noninteractive，避免在安装过程中出现交互式提示
+# 设置 DEBIAN_FRONTEND 为 noninteractive，避免在安装过程中出现大部分交互式提示
 ENV DEBIAN_FRONTEND=noninteractive
 
 # 设置默认的 root 密码。可以在容器运行时通过 -e ROOT_PASSWORD=your_password 来覆盖
 ENV ROOT_PASSWORD=admin123
 
 # ==================================================================
-# 步骤 1 & 2: 安装基础工具和语言环境 (已应用 dpkg 修复)
+# 步骤 1 & 2: 安装基础工具和语言环境 (已应用所有修复)
 # ==================================================================
-# 关键修复: 创建一个临时的 policy-rc.d 文件，阻止 dpkg 在安装软件包后自动启动服务。
-# 这可以避免安装脚本与基础镜像的 s6-overlay 环境发生冲突。
-# exit 101 的含义是 "action forbidden by policy"，即策略禁止该操作。
+# 修复 1: 创建临时的 policy-rc.d 文件，阻止 dpkg 在安装软件包后自动启动服务，避免与 s6-overlay 冲突。
 RUN echo '#!/bin/sh' > /usr/sbin/policy-rc.d && \
     echo 'exit 101' >> /usr/sbin/policy-rc.d && \
     chmod +x /usr/sbin/policy-rc.d
 
 # 执行安装
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+    # 修复 2 (最终修复): 添加 dpkg 选项，强制对配置文件冲突使用默认行为（保留旧文件），从而完全避免交互式提示。
+    apt-get install -y \
+    -o Dpkg::Options::="--force-confdef" \
+    -o Dpkg::Options::="--force-confold" \
+    --no-install-recommends \
     # --- 基础工具 ---
     openssh-server \
     sudo \
