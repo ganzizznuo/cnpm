@@ -3,12 +3,6 @@
 # ==================================================================
 FROM jc21/nginx-proxy-manager:latest
 
-# ==================================================================
-# 镜像元数据与环境变量
-# ==================================================================
-LABEL maintainer="Your Name <your.email@example.com>"
-LABEL description="集成了SSH、开发工具(Python, Node.js, Go)、Supervisor 和动态 Cron 的 Nginx Proxy Manager."
-
 # 设置 DEBIAN_FRONTEND 为 noninteractive，避免在安装过程中出现交互式提示
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Shanghai
@@ -48,7 +42,6 @@ RUN apt-get update && \
     python3 \
     python3-pip \
     nodejs \
-    golang-go \
     # --- 进程管理与计划任务 ---
     supervisor \
     cron \
